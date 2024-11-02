@@ -1,7 +1,7 @@
 import easyocr
 import logging
 import re
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 import uvicorn
 
 # Configura o nível de logging para ERROR para suprimir avisos do EasyOCR
@@ -17,8 +17,11 @@ six_digit_pattern = re.compile(r'^\d{6}$')
 app = FastAPI()
 
 # Endpoint FastAPI para upload da imagem e retorno do OCR
-@app.post("/upload-image/")
+@app.post("/")
 async def upload_image(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Tipo de arquivo inválido. Por favor, faça upload de imagens.")
+
     try:
         contents = await file.read()
 
@@ -31,16 +34,16 @@ async def upload_image(file: UploadFile = File(...)):
 
             # Verifica se o texto contém exatamente 6 dígitos numéricos
             if six_digit_pattern.match(text):
-                print(f"{text}, {confidence}")
+                logging.info(f"{text}, {confidence}")
                 return {"assetNumber": text, "confidenceLevel": confidence}
 
         # Retorna null se não houver texto com 6 dígitos
-        print(f"Asset number não encontrado")
+        logging.error(f"Asset number não encontrado")
         return {"assetNumber": None, "confidenceLevel": None}
      
     except Exception as e:
-        print(f"Erro: {str(e)}")
-        return {"assetNumber": None, "confidenceLevel": None}
+        logging.error(f"Erro: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
     finally:
         file.file.close()
